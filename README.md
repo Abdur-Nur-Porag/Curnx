@@ -2,7 +2,7 @@
 
 > A C parser and interpreter written in pure vanilla JavaScript — run C code directly in your browser, no compiler needed.
 
-![License](https://img.shields.io/badge/license-MIT-blue)
+![License](https://img.shields.io/badge/license-MIT%20%2B%20Attribution-blue)
 ![Language](https://img.shields.io/badge/language-Vanilla%20JS-yellow)
 ![Status](https://img.shields.io/badge/status-active-brightgreen)
 ![Version](https://img.shields.io/badge/version-1.1.0-orange)
@@ -36,6 +36,15 @@
 
 ---
 
+## Documentation
+
+| Doc | Covers |
+|---|---|
+| [`docs/KEYWORDS.md`](docs/KEYWORDS.md) | All 25 supported C keywords, by category, plus built-in constants & stdlib functions |
+| [`docs/HEADERS.md`](docs/HEADERS.md) | Full syntax reference for `<core.h>`, `"user.h"`, and `<bridge.jh>` includes |
+
+---
+
 ## Project Structure
 
 ```
@@ -54,6 +63,10 @@ curnx/
 ├── examples/             ← Sample headers used by the demo
 │   ├── util.h            ← user-defined C header
 │   └── math.jh           ← JS bridge header
+├── docs/                 ← Reference documentation
+│   ├── KEYWORDS.md       ← every supported C keyword, categorized
+│   └── HEADERS.md        ← `.h` / `.jh` include syntax in detail
+├── LICENSE
 └── README.md
 ```
 
@@ -118,6 +131,8 @@ await Curnx.execute(code, { basePath: 'examples/' });
 ---
 
 ## Header files
+
+> Full syntax reference: [`docs/HEADERS.md`](docs/HEADERS.md)
 
 C already distinguishes two include forms:
 
@@ -205,6 +220,8 @@ If you don't need `#include "x.h"` / `#include <x.jh>` resolution, opening `inde
 
 ## Supported C Features
 
+> Full keyword-by-keyword reference: [`docs/KEYWORDS.md`](docs/KEYWORDS.md)
+
 | Feature | Support |
 |---|---|
 | `int`, `float`, `double`, `char` | ✅ |
@@ -234,6 +251,24 @@ If you don't need `#include "x.h"` / `#include <x.jh>` resolution, opening `inde
 
 ## License
 
-MIT — use freely, modify freely, share freely.
+MIT + Attribution — free to use, modify, and distribute, **with one condition**: keep crediting the Contributors.
+
+Curnx is free for use and distribution, but every copy, fork, or derivative must continue to visibly highlight its Contributors — the same attribution principle organizations like the **Mozilla Foundation** apply to the projects they steward. Stripping or hiding contributor credit is the one thing this license doesn't allow.
+
+In practice, that means:
+- Keep the copyright notice and this attribution clause in any copy of the source.
+- If you ship Curnx (or a fork of it) in a product, app, or site, credit it and its Contributors somewhere reasonably visible — a README, an "About"/credits page, or a `NOTICE` file all count.
+
+See [`LICENSE`](LICENSE) for the full text.
 
 ---
+
+### Contributors
+
+Thank you to everyone who has contributed to Curnx. Add yourself here when you submit a PR:
+
+- *Curnx CJs Contributors* — original engine, parser, and interpreter
+
+---
+
+*Built with ❤️ using zero dependencies — just HTML, CSS, and vanilla JavaScript.*
