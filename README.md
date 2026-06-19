@@ -237,5 +237,3 @@ If you don't need `#include "x.h"` / `#include <x.jh>` resolution, opening `inde
 MIT — use freely, modify freely, share freely.
 
 ---
-
-*Built with ❤️ using zero dependencies — just HTML, CSS, and vanilla JavaScript.*
