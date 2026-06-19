@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Curnx CJs — C Interpreter in JavaScript</title>
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────────── -->
+  <header>
+    <div class="logo">Curnx <span>CJs</span></div>
+    <div class="tagline">C Parser &amp; Interpreter — Vanilla JavaScript · v1.1</div>
+    <button class="btn btn-clear" onclick="clearOutput()">Clear</button>
+    <button class="btn btn-run"   onclick="runCode()">▶ Run</button>
+  </header>
+
+  <!-- ── Main split layout ───────────────────────────────────── -->
+  <div class="main">
+
+    <!-- Left pane: Editor -->
+    <div class="pane">
+      <div class="pane-header">
+        <div class="dot dot-blue"></div>
+        editor.c
+      </div>
+      <div class="samples" id="samples"></div>
+      <textarea id="editor" spellcheck="false" placeholder="// Write your C code here..."></textarea>
+      <div class="status-bar" id="status">Ready — press Ctrl+Enter to run</div>
+    </div>
+
+    <!-- Right pane: Output -->
+    <div class="pane">
+      <div class="pane-header">
+        <div class="dot dot-green"></div>
+        output
+      </div>
+      <div id="output-wrap">
+        <div class="out-line out-info">// Run your C code to see output here</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Scripts (order matters) ──────────────────────────────
+       engine/ holds the framework itself:
+         parser.js      → tokenizer + AST generator
+         interpreter.js → AST evaluator (+ JS-bridge support)
+         curnx.js        → base of the framework (Curnx.execute,
+                            Curnx.loadExecute, Curnx.ast) — resolves
+                            #include for core/.h/.jh headers
+       src/ holds the demo app built on top of the engine.
+  -->
+  <script src="engine/parser.js"></script>
+  <script src="engine/interpreter.js"></script>
+  <script src="engine/curnx.js"></script>
+
+  <script src="src/samples.js"></script>
+  <script src="src/app.js"></script>
+
+</body>
+</html>

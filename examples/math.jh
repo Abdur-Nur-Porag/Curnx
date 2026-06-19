@@ -1,0 +1,16 @@
+// examples/math.jh
+// A JS "communication" header. Curnx loads this with the
+// JS engine itself (not the C interpreter) and links every
+// top-level function declared here so C code can call it
+// directly, e.g. `#include <math.jh>` then `addNum(a, b)`.
+
+function addNum(num_1, num_2) {
+  return num_1 + num_2;
+}
+
+function gcd(a, b) {
+  while (b !== 0) {
+    [a, b] = [b, a % b];
+  }
+  return Math.abs(a);
+}
