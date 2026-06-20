@@ -1,5 +1,5 @@
 // ============================================================
-//  CURNX v1.1 — engine/interpreter.js
+//  CURNX v1.2 — engine/interpreter.js
 //  Tree-walk Interpreter (AST Evaluator)
 //  Walks the AST and executes C code in JavaScript.
 //  Supports a "jsBridge" — native JS functions exposed to C
@@ -16,6 +16,7 @@ class CError extends Error {}
 class Env {
   constructor(parent = null) {
     this.vars   = {};
+    this.types  = {};   // name -> canonical type string, for typeof()
     this.parent = parent;
   }
 
@@ -34,6 +35,14 @@ class Env {
   }
 
   def(name, val) { this.vars[name] = val; }
+
+  defType(name, typeStr) { this.types[name] = typeStr; }
+
+  getType(name) {
+    if (name in this.types) return this.types[name];
+    if (this.parent)        return this.parent.getType(name);
+    return null;
+  }
 }
 
 // ── Main Interpreter class ────────────────────────────────────
@@ -107,12 +116,63 @@ class Interpreter {
     const env = new Env(this.global);
     for (let i = 0; i < fn.params.length; i++) {
       env.def(fn.params[i].name, args[i] !== undefined ? args[i] : 0);
+      if (fn.params[i].varType) {
+        env.defType(fn.params[i].name, this._typeDescToString(fn.params[i].varType, { isArray: !!fn.params[i].arr }));
+      }
     }
 
     const r = this._execBlock(fn.body, env);
     this.callDepth--;
     if (r instanceof ReturnSignal) return r.val;
     return 0;
+  }
+
+  // ── Type descriptor → display string (used by typeof()) ───────
+  _typeDescToString(t, { isArray = false } = {}) {
+    if (!t) return 'int';
+    let s = t.base || 'int';
+    if (s.startsWith('struct:')) s = 'struct ' + s.slice(7);
+    if (t.ptr) s += ' ' + '*'.repeat(t.ptr);
+    if (isArray) s += '[]';
+    return s;
+  }
+
+  // ── Best-effort runtime type inference (no static decl found) ─
+  _inferRuntimeType(v) {
+    if (v === null || v === undefined) return 'void';
+    if (Array.isArray(v)) {
+      if (v.length && typeof v[0] === 'string') return 'char[]';
+      return 'int[]';
+    }
+    if (typeof v === 'string') return v.length <= 1 ? 'char' : 'char*';
+    if (typeof v === 'number') return Number.isInteger(v) ? 'int' : 'double';
+    if (typeof v === 'object') return 'struct';
+    return typeof v;
+  }
+
+  // ── Static-ish float detection (fixes float division truncation) ─
+  // JS can't distinguish 7.0 from 7 at runtime, so "is this expression
+  // float?" has to be answered from the AST + declared types, not the
+  // resulting number's integer-ness.
+  _isFloatNode(node, env) {
+    if (!node) return false;
+    switch (node.type) {
+      case 'Float':  return true;
+      case 'Num':    return false;
+      case 'Paren':  return this._isFloatNode(node.expr, env);
+      case 'Unary':  return node.op === '-' || node.op === '+' ? this._isFloatNode(node.expr, env) : false;
+      case 'Cast':   return node.castType ? node.castType.category === 'float' : false;
+      case 'BinOp':  return this._isFloatNode(node.left, env) || this._isFloatNode(node.right, env);
+      case 'ID': {
+        const t = env.getType(node.name);
+        return !!t && /\b(float|double)\b/.test(t);
+      }
+      case 'Call': {
+        const callee = node.callee && node.callee.type === 'ID' ? node.callee.name : null;
+        return !!callee && ['sqrt','pow','fabs','sin','cos','tan','log','log10','exp','atof'].includes(callee);
+      }
+      default: return false;
+    }
   }
 
   // ── Standard library builtins ────────────────────────────────
@@ -199,20 +259,43 @@ class Interpreter {
   }
 
   // ── scanf implementation ─────────────────────────────────────
+  // Supports plain conversions (%d %i %f %c %s ...) and the
+  // "scanset" form %[^chars] — most commonly %[^\n], which reads
+  // an entire line/command instead of stopping at whitespace.
   _scanf(args) {
     if (args.length === 0) return 0;
-    const fmt   = String(args[0]);
-    const specs = [...fmt.matchAll(/%([diouxXeEfgGcs])/g)];
-    let count   = 0;
+    const fmt = String(args[0]);
+    const specRe = /%(?:\[(\^?)([^\]]*)\]|[hlLqjzt]*([diouxXeEfFgGcs]))/g;
+    const specs  = [...fmt.matchAll(specRe)];
+    let count = 0;
+
     for (let i = 0; i < specs.length; i++) {
-      const spec = specs[i][1];
-      const raw  = window.prompt(`scanf input (%${spec}):`);
-      if (raw === null) break;
-      const val =
-        (spec === 'f' || spec === 'e' || spec === 'g') ? parseFloat(raw) || 0 :
-        spec === 'c' ? raw[0] || '\0' :
-        spec === 's' ? raw :
-        parseInt(raw) || 0;
+      const m       = specs[i];
+      const isScanset = m[2] !== undefined;
+      let val;
+
+      if (isScanset) {
+        // %[^...] — read the full line as-is (a "command"/sentence),
+        // stopping logically at the excluded character (default: \n).
+        const excluded = m[2] || '\n';
+        const raw = window.prompt(`scanf input (%[^${excluded.replace(/\n/g, '\\n')}]) — full line:`);
+        if (raw === null) break;
+        const cutIdx = [...excluded].reduce((min, ch) => {
+          const idx = raw.indexOf(ch);
+          return idx !== -1 && idx < min ? idx : min;
+        }, raw.length);
+        val = raw.slice(0, cutIdx);
+      } else {
+        const spec = m[3];
+        const raw  = window.prompt(`scanf input (%${spec}):`);
+        if (raw === null) break;
+        val =
+          (spec === 'f' || spec === 'F' || spec === 'e' || spec === 'E' || spec === 'g' || spec === 'G') ? (parseFloat(raw) || 0) :
+          spec === 'c' ? (raw[0] || '\0') :
+          spec === 's' ? (raw.trim().split(/\s+/)[0] ?? '') :    // %s stops at first whitespace
+          (parseInt(raw, 10) || 0);
+      }
+
       if (this._scanRefs && this._scanRefs[i]) this._scanRefs[i](val);
       count++;
     }
@@ -230,20 +313,23 @@ class Interpreter {
       if (i >= fmt.length) break;
       if (fmt[i] === '%') { out += '%'; i++; continue; }
 
-      let flags = '', width = '', prec = '', spec = '';
+      let flags = '', width = '', prec = '', spec = '', lenMod = '';
       while ('-+ #0'.includes(fmt[i])) flags += fmt[i++];
       while (/\d/.test(fmt[i]))        width += fmt[i++];
       if (fmt[i] === '.') { i++; while (/\d/.test(fmt[i])) prec += fmt[i++]; }
-      while ('hlLqjzt'.includes(fmt[i])) i++; // skip length modifiers
+      while ('hlLqjzt'.includes(fmt[i])) lenMod += fmt[i++]; // h/l/ll/L/q/j/z/t — width of the argument
       spec = fmt[i++];
+
+      // "wide" = the value may legitimately exceed 32 bits (long, long long, etc.)
+      const wide = lenMod.includes('l') || lenMod.includes('q') || lenMod.includes('j') || lenMod.includes('L');
 
       const v = vals[vi++];
       switch (spec) {
         case 'd': case 'i': out += fmtInt(v, width, flags);   break;
-        case 'u':           out += fmtInt(Math.abs(v >>> 0), width, flags); break;
-        case 'o':           out += (~~v >>> 0).toString(8);    break;
-        case 'x':           out += (~~v >>> 0).toString(16);   break;
-        case 'X':           out += (~~v >>> 0).toString(16).toUpperCase(); break;
+        case 'u':           out += fmtInt(toUnsignedBits(v, wide), width, flags.replace(/[+ ]/g, '')); break;
+        case 'o':           out += toUnsignedBits(v, wide).toString(8);    break;
+        case 'x':           out += toUnsignedBits(v, wide).toString(16);   break;
+        case 'X':           out += toUnsignedBits(v, wide).toString(16).toUpperCase(); break;
         case 'f': case 'F': out += fmtFloat(v, width, prec !== '' ? +prec : 6, flags); break;
         case 'e': case 'E': out += (+v || 0).toExponential(prec !== '' ? +prec : 6); break;
         case 'g': case 'G': out += parseFloat((+v || 0).toPrecision(prec !== '' ? +prec : 6)).toString(); break;
@@ -255,14 +341,23 @@ class Interpreter {
           out += s;
           break;
         }
-        case 'p': out += '0x' + (~~v).toString(16); break;
+        case 'p': out += '0x' + toUnsignedBits(v, true).toString(16); break;
         default:  out += '%' + spec;
       }
     }
     return out;
 
+    // Renders the unsigned bit-pattern of v for %o/%x/%X/%u/%p.
+    // wide=true (l/ll/q/j/L length modifier) keeps full JS-safe-integer
+    // range instead of wrapping to 32 bits, so long/long long survive.
+    function toUnsignedBits(v, wide) {
+      let n = Math.trunc(+v || 0);
+      if (wide) return n < 0 ? n + (Number.MAX_SAFE_INTEGER + 1) : n;
+      return n >>> 0;
+    }
+
     function fmtInt(v, width, flags) {
-      let s = String(~~(+v || 0));
+      let s = String(Math.trunc(+v || 0));
       if (flags.includes('+') || flags.includes(' ')) s = (+v >= 0 ? '+' : '') + s;
       if (width !== '') s = flags.includes('-') ? s.padEnd(+width) : s.padStart(+width, flags.includes('0') ? '0' : ' ');
       return s;
@@ -375,11 +470,15 @@ class Interpreter {
 
   _execVarDecl(node, env) {
     for (const d of node.decls) {
-      const base = node.varType?.base || 'int';
-      let val    = 0;
+      const vt       = node.varType || { base: 'int', category: 'int' };
+      const base     = vt.base || 'int';
+      const category = vt.category || (base === 'char' ? 'char' : (base === 'float' || base === 'double') ? 'float' : base.startsWith('struct:') ? 'struct' : 'int');
+      let val        = 0;
+      let isArray    = false;
 
       if (d.size !== null && d.size !== undefined) {
         // Array declaration
+        isArray = true;
         const sz = this._eval(d.size, env);
         if (d.init && d.init.type === 'InitList') {
           const arr = new Array(sz).fill(0);
@@ -389,9 +488,9 @@ class Interpreter {
           val = [...d.init.val].map(c => c.charCodeAt(0));
           val.push(0);
         } else {
-          val = new Array(sz).fill(base === 'char' ? '\0' : 0);
+          val = new Array(sz).fill(category === 'char' ? '\0' : 0);
         }
-      } else if (base.startsWith('struct:')) {
+      } else if (category === 'struct') {
         // Struct instance
         const sname = base.slice(7);
         const sDef  = this.structs[sname];
@@ -403,10 +502,15 @@ class Interpreter {
         else if (d.init.type === 'InitList') val = d.init.items.map(i => this._eval(i, env));
         else val = this._eval(d.init, env);
       } else {
-        val = base === 'char' ? '\0' : (base === 'float' || base === 'double') ? 0.0 : 0;
+        val = category === 'char' ? '\0' : category === 'float' ? 0.0 : 0;
       }
 
+      // Integer-family declarations truncate to whole numbers, mirroring
+      // C's storage semantics for int/long/short/unsigned (but not float/double).
+      if (category === 'int' && typeof val === 'number') val = Math.trunc(val);
+
       env.def(d.name, val);
+      env.defType(d.name, this._typeDescToString(vt, { isArray }));
     }
   }
 
@@ -441,7 +545,28 @@ class Interpreter {
       case 'Char':     return node.val.charCodeAt(0);
       case 'Paren':    return this._eval(node.expr, env);
       case 'Comma':    this._eval(node.left, env); return this._eval(node.right, env);
-      case 'Cast':     return this._eval(node.expr, env);
+      case 'Cast': {
+        const v = this._eval(node.expr, env);
+        const t = node.castType;
+        if (!t) return v;
+        if (t.category === 'char') {
+          if (typeof v === 'number') return String.fromCharCode(((Math.trunc(v) % 256) + 256) % 256);
+          if (typeof v === 'string') return v[0] || '\0';
+          return '\0';
+        }
+        const n = typeof v === 'string' ? (v.charCodeAt(0) || 0) : (+v || 0);
+        if (t.category === 'float') return n;          // float/double: keep fraction
+        return Math.trunc(n);                           // int family (incl. long/short/unsigned)
+      }
+      case 'TypeOf': {
+        if (node.argType) return this._typeDescToString(node.argType);
+        const expr = node.argExpr;
+        if (expr && expr.type === 'ID') {
+          const declared = env.getType(expr.name);
+          if (declared) return declared;
+        }
+        return this._inferRuntimeType(this._eval(expr, env));
+      }
       case 'InitList': return node.items.map(i => this._eval(i, env));
 
       case 'ID': {
@@ -484,7 +609,11 @@ class Interpreter {
           case '+':  return (typeof l === 'string' || typeof r === 'string') ? String(l) + String(r) : l + r;
           case '-':  return l - r;
           case '*':  return l * r;
-          case '/':  if (r === 0) throw new CError('Division by zero'); return (Number.isInteger(l) && Number.isInteger(r)) ? Math.trunc(l / r) : l / r;
+          case '/':  {
+            if (r === 0) throw new CError('Division by zero');
+            const floaty = this._isFloatNode(node.left, env) || this._isFloatNode(node.right, env);
+            return floaty ? l / r : ((Number.isInteger(l) && Number.isInteger(r)) ? Math.trunc(l / r) : l / r);
+          }
           case '%':  if (r === 0) throw new CError('Modulo by zero'); return l % r;
           case '<':  return l < r  ? 1 : 0;
           case '>':  return l > r  ? 1 : 0;
@@ -510,7 +639,12 @@ class Interpreter {
             case '+=': rval = cur + rval; break;
             case '-=': rval = cur - rval; break;
             case '*=': rval = cur * rval; break;
-            case '/=': if (rval === 0) throw new CError('Division by zero'); rval = (Number.isInteger(cur) && Number.isInteger(rval)) ? Math.trunc(cur / rval) : cur / rval; break;
+            case '/=': {
+              if (rval === 0) throw new CError('Division by zero');
+              const floaty = this._isFloatNode(node.left, env) || this._isFloatNode(node.right, env);
+              rval = floaty ? cur / rval : ((Number.isInteger(cur) && Number.isInteger(rval)) ? Math.trunc(cur / rval) : cur / rval);
+              break;
+            }
             case '%=': rval = cur % rval; break;
           }
         }
@@ -536,7 +670,7 @@ class Interpreter {
         // Special handling for scanf to capture write-back references
         if (callee === 'scanf') {
           const fmt   = node.args[0] ? this._eval(node.args[0], env) : '';
-          const specs = [...String(fmt).matchAll(/%([diouxXeEfgGcs])/g)];
+          const specs = [...String(fmt).matchAll(/%(?:\[(?:\^?)[^\]]*\]|[hlLqjzt]*[diouxXeEfFgGcs])/g)];
           this._scanRefs = specs.map((_, i) => {
             const refNode = node.args[i + 1];
             if (!refNode) return () => {};
