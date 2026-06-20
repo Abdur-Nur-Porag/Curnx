@@ -1,5 +1,5 @@
 // ============================================================
-//  CURNX v1.1 — engine/curnx.js
+//  CURNX v1.2 — engine/curnx.js
 //  Base of the framework. Calls the parser (tokenizer + AST)
 //  and the interpreter, and resolves C preprocessor includes:
 //
@@ -20,7 +20,7 @@
 
 const Curnx = (() => {
 
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0';
 
   // Core C headers Curnx already implements as builtins —
   // included for compatibility, resolved as a no-op.
