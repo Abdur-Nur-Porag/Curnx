@@ -1,5 +1,5 @@
 // ============================================================
-//  CURNX v1.1 — engine/parser.js
+//  CURNX v1.2 — engine/parser.js
 //  Tokenizer + Recursive-Descent Parser (AST generator)
 //  Converts raw C source into tokens, then into an AST.
 //  Loaded by engine/curnx.js — exposes: tokenize(), parse(), TT
@@ -12,7 +12,8 @@ const TT = {
   VOID:'VOID', RETURN:'RETURN', IF:'IF', ELSE:'ELSE', WHILE:'WHILE',
   FOR:'FOR', DO:'DO', BREAK:'BREAK', CONTINUE:'CONTINUE', SWITCH:'SWITCH',
   CASE:'CASE', DEFAULT:'DEFAULT', STRUCT:'STRUCT', TYPEDEF:'TYPEDEF',
-  SIZEOF:'SIZEOF', NULL_KW:'NULL_KW', INCLUDE:'INCLUDE', DEFINE:'DEFINE',
+  SIZEOF:'SIZEOF', TYPEOF:'TYPEOF', NULL_KW:'NULL_KW', INCLUDE:'INCLUDE', DEFINE:'DEFINE',
+  LONG:'LONG', SHORT:'SHORT', UNSIGNED:'UNSIGNED', SIGNED:'SIGNED', CONST:'CONST',
   NUM:'NUM', FNUM:'FNUM', STR:'STR', CHAR:'CHAR', ID:'ID',
   PLUS:'PLUS', MINUS:'MINUS', STAR:'STAR', SLASH:'SLASH', PERCENT:'PERCENT',
   EQ:'EQ', NEQ:'NEQ', LT:'LT', GT:'GT', LTE:'LTE', GTE:'GTE',
@@ -33,9 +34,10 @@ const KEYWORDS = {
   void:TT.VOID, return:TT.RETURN, if:TT.IF, else:TT.ELSE, while:TT.WHILE,
   for:TT.FOR, do:TT.DO, break:TT.BREAK, continue:TT.CONTINUE,
   switch:TT.SWITCH, case:TT.CASE, default:TT.DEFAULT,
-  struct:TT.STRUCT, typedef:TT.TYPEDEF, sizeof:TT.SIZEOF,
-  NULL:TT.NULL_KW, long:TT.INT, short:TT.INT, unsigned:TT.INT, signed:TT.INT,
-  const:TT.INT,
+  struct:TT.STRUCT, typedef:TT.TYPEDEF, sizeof:TT.SIZEOF, typeof:TT.TYPEOF,
+  NULL:TT.NULL_KW,
+  long:TT.LONG, short:TT.SHORT, unsigned:TT.UNSIGNED, signed:TT.SIGNED,
+  const:TT.CONST,
 };
 
 function unescape_c(c) {
@@ -182,15 +184,67 @@ function parse(tokens) {
   const check = (...types) => types.includes(tokens[pos].type);
   const match = (...types) => { if (check(...types)) return eat(); return null; };
 
-  const isTypeName = () => check(TT.INT, TT.FLOAT_KW, TT.CHAR_KW, TT.DOUBLE, TT.VOID);
+  // A "type" can start with a base keyword (int/float/char/double/void)
+  // or with a modifier keyword used alone (unsigned x; long y;).
+  const isBaseTypeTok = () => check(TT.INT, TT.FLOAT_KW, TT.CHAR_KW, TT.DOUBLE, TT.VOID);
+  const isTypeModTok  = () => check(TT.LONG, TT.SHORT, TT.UNSIGNED, TT.SIGNED, TT.CONST);
+  const isTypeName    = () => isBaseTypeTok() || isTypeModTok();
 
+  // Builds a canonical type descriptor from a run of type keywords,
+  // e.g. "unsigned long long int", "long double", "signed char", "short".
+  // Returns { base, category, unsigned, ptr }
+  //   base:     canonical display name (used by typeof / sizeof / debugging)
+  //   category: 'void' | 'int' | 'float' | 'char' | 'struct'  (semantics bucket)
+  //   unsigned: true if an "unsigned" modifier was present
+  //   ptr:      pointer depth (number of leading '*' after the type)
   const parseType = () => {
-    let t = eat();
-    while (isTypeName()) t = eat(); // handle: unsigned long int, etc.
-    const base = t.val || t.type;
+    let longCount = 0, short = false, unsigned = false, signed = false;
+    let baseTok = null;
+
+    while (isTypeName()) {
+      const t = eat();
+      switch (t.type) {
+        case TT.LONG:      longCount++;        break;
+        case TT.SHORT:     short = true;       break;
+        case TT.UNSIGNED:  unsigned = true;     break;
+        case TT.SIGNED:    signed = true;       break;
+        case TT.CONST:     /* qualifier, no semantic effect */ break;
+        case TT.INT:       baseTok = 'int';     break;
+        case TT.FLOAT_KW:  baseTok = 'float';   break;
+        case TT.CHAR_KW:   baseTok = 'char';    break;
+        case TT.DOUBLE:    baseTok = 'double';  break;
+        case TT.VOID:      baseTok = 'void';    break;
+      }
+    }
+
+    let base, category;
+
+    if (baseTok === 'void') {
+      base = 'void'; category = 'void';
+    } else if (baseTok === 'double') {
+      base = longCount > 0 ? 'long double' : 'double';
+      category = 'float';
+    } else if (baseTok === 'float') {
+      base = 'float'; category = 'float';
+    } else if (baseTok === 'char') {
+      base = unsigned ? 'unsigned char' : signed ? 'signed char' : 'char';
+      category = 'char';
+    } else {
+      // int family: explicit "int", or bare modifiers like "long"/"unsigned"/"short"
+      const parts = [];
+      if (unsigned) parts.push('unsigned');
+      if (longCount === 1) parts.push('long');
+      else if (longCount >= 2) parts.push('long long');
+      if (short) parts.push('short');
+      parts.push('int');
+      base = parts.join(' ');
+      category = 'int';
+    }
+
     let ptr = 0;
     while (check(TT.STAR)) { eat(TT.STAR); ptr++; }
-    return { base, ptr };
+
+    return { base, category, unsigned, ptr };
   };
 
   // ── TOP LEVEL ──────────────────────────────────────────────
@@ -301,7 +355,7 @@ function parse(tokens) {
       const sn  = eat(TT.ID).val;
       let ptr   = 0;
       while (check(TT.STAR)) { eat(); ptr++; }
-      typ = { base: 'struct:' + sn, ptr };
+      typ = { base: 'struct:' + sn, category: 'struct', unsigned: false, ptr };
     } else {
       typ = parseType();
     }
@@ -460,6 +514,21 @@ function parse(tokens) {
       if (match(TT.LPAREN)) { if (isTypeName()) parseType(); else parseExpr(); eat(TT.RPAREN); }
       else parseUnary();
       return { type: 'Num', val: 4 };
+    }
+    if (check(TT.TYPEOF)) {
+      eat();
+      let argType = null, argExpr = null;
+      if (match(TT.LPAREN)) {
+        if (isTypeName() || check(TT.STRUCT)) {
+          argType = check(TT.STRUCT) ? (eat(), { base: 'struct:' + eat(TT.ID).val, category: 'struct' }) : parseType();
+        } else {
+          argExpr = parseExpr();
+        }
+        eat(TT.RPAREN);
+      } else {
+        argExpr = parseUnary();
+      }
+      return { type: 'TypeOf', argType, argExpr };
     }
     return parsePostfix();
   }
