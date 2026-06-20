@@ -1,5 +1,5 @@
 // ============================================================
-//  CURNX v1.1 — src/samples.js
+//  CURNX v1.2 — src/samples.js
 //  Built-in C code examples shown in the UI
 // ============================================================
 
@@ -163,6 +163,70 @@ void main() {
     sum = addNum(a, b);
     printf("addNum(%d, %d) = %d\\n", a, b, sum);
     printf("gcd(48, 18)    = %d\\n", gcd(48, 18));
+}`
+  },
+  {
+    label: 'Type System (v1.2)',
+    code: `#include <stdio.h>
+
+int main() {
+    long a = 100000;
+    long long b = 9000000000;
+    unsigned int c = 42;
+    unsigned long d = 7;
+    short e = 3;
+    long double f = 3.14159;
+    signed char g = 5;
+
+    printf("long       a = %ld\\n", a);
+    printf("long long  b = %lld\\n", b);
+    printf("unsigned   c = %u\\n", c);
+    printf("u long     d = %lu\\n", d);
+    printf("short      e = %d\\n", e);
+    printf("long dbl   f = %.5f\\n", f);
+    printf("signed chr g = %d\\n", g);
+    return 0;
+}`
+  },
+  {
+    label: 'typeof Demo',
+    code: `#include <stdio.h>
+
+int main() {
+    int x = 5;
+    float y = 2.5;
+    long long z = 100;
+    char ch = 'A';
+    double pi = 3.14159;
+
+    printf("typeof(x)  = %s\\n", typeof(x));
+    printf("typeof(y)  = %s\\n", typeof(y));
+    printf("typeof(z)  = %s\\n", typeof(z));
+    printf("typeof(ch) = %s\\n", typeof(ch));
+    printf("typeof(pi) = %s\\n", typeof(pi));
+
+    // typeof also works directly on a type name
+    printf("typeof(long long) = %s\\n", typeof(long long));
+    return 0;
+}`
+  },
+  {
+    label: 'scanf %[^\\\\n]',
+    code: `#include <stdio.h>
+
+int main() {
+    char word[20];
+    char sentence[100];
+
+    printf("Enter a single word: ");
+    scanf("%s", word);
+
+    printf("Enter a full sentence: ");
+    scanf(" %[^\\n]", sentence);
+
+    printf("Word:     %s\\n", word);
+    printf("Sentence: %s\\n", sentence);
+    return 0;
 }`
   }
 ];
