@@ -5,9 +5,18 @@
 ![License](https://img.shields.io/badge/license-MIT%20%2B%20Attribution-blue)
 ![Language](https://img.shields.io/badge/language-Vanilla%20JS-yellow)
 ![Status](https://img.shields.io/badge/status-active-brightgreen)
-![Version](https://img.shields.io/badge/version-1.1.0-orange)
+![Version](https://img.shields.io/badge/version-1.2.0-orange)
 
 ---
+
+## What's new in v1.2
+
+- **Rebuilt the type parser** — `long`, `short`, `unsigned`, `signed` are real composable modifiers now (not aliased straight to `int`), so `long long int`, `unsigned long`, `long double`, `signed char`, etc. all parse correctly and report their true name. Bare modifiers without a base type also work (`unsigned x;`, `long y;`).
+- **`typeof`** — a new Curnx-extension keyword that returns a variable's or expression's datatype as a string at runtime: `typeof(x)`, `typeof(long long)`. See [`docs/KEYWORDS.md`](docs/KEYWORDS.md).
+- **`printf` width/precision, hardened**: `%5d`, `%-5d`, `%05d`, `%.2f`, `%9.7f`, `%2.5f`, plus `%i` as a full alias for `%d`. Also fixed a real overflow bug where `%lld`/`%llx`/`%llu` silently corrupted large `long`/`long long` values via JS's 32-bit `~~` truncation trick — these now use `Math.trunc` and stay accurate up to the JS safe-integer range.
+- **`scanf` scanset support**: `%[^\n]` reads a full line/sentence instead of stopping at the first space — useful for "enter a command" style input. `%s` itself now correctly stops at the first whitespace character, matching real C semantics (previously it grabbed the whole input).
+- **Float-division bug fix**: `7.0 / 2` was truncating to `3` instead of `3.5`, because JS can't tell `7.0` apart from `7` at runtime. Division now checks the expression's *declared* type (literal `7.0` vs. variable declared `float`/`double`) instead of guessing from the resulting value.
+- **Real `(type)` casts**: `(int)`, `(float)`, `(char)` casts now actually convert the value instead of being a no-op.
 
 ## What's new in v1.1
 
@@ -23,16 +32,17 @@
 ## Features
 
 - **Full C Lexer** — tokenizes keywords, operators, literals, identifiers
-- **Recursive Descent Parser** — builds a complete AST
+- **Recursive Descent Parser** — builds a complete AST, with a robust composite-type system (`long long int`, `unsigned long`, `long double`, etc.)
 - **Tree-walk Interpreter** — evaluates the AST directly in JS
-- **printf / scanf** — full format string support (`%d %f %s %c %x %o` etc.), scanf uses browser `prompt()`
+- **printf / scanf** — full format string support (width, precision, flags, `%i`, `%lld`/`%llx`/`%llu`, scansets like `%[^\n]`), scanf uses browser `prompt()`
 - **All control flow** — `if/else`, `while`, `for`, `do-while`, `switch/case`, `break`, `continue`, `return`
-- **Types** — `int`, `float`, `double`, `char`, arrays, pointers, `struct`
-- **Operators** — arithmetic, bitwise, logical, relational, compound assignment (`+=`, `-=`, etc.), `++`/`--`
+- **Types** — `int`, `float`, `double`, `char`, `long`/`short`/`unsigned`/`signed` (and combinations), arrays, pointers, `struct`
+- **`typeof`** — a Curnx extension that returns a datatype name as a string at runtime
+- **Operators** — arithmetic, bitwise, logical, relational, compound assignment (`+=`, `-=`, etc.), `++`/`--`, real `(type)` casts
 - **Functions** — recursion, parameters, return values
 - **`#include`** — core headers, user `.h` headers, and `.jh` JS-bridge headers
 - **Standard library** — `sqrt`, `pow`, `abs`, `rand`, `strlen`, `strcmp`, `atoi`, `malloc`, `toupper`, and more
-- **10 built-in samples** — Hello World, Fibonacci, Factorial, Bubble Sort, Structs, Switch, Pointers, scanf, User Header, JS Bridge
+- **13 built-in samples** — Hello World, Fibonacci, Factorial, Bubble Sort, Structs, Switch, Pointers, scanf, User Header, JS Bridge, Type System, typeof Demo, scanf scanset
 
 ---
 
@@ -40,7 +50,7 @@
 
 | Doc | Covers |
 |---|---|
-| [`docs/KEYWORDS.md`](docs/KEYWORDS.md) | All 25 supported C keywords, by category, plus built-in constants & stdlib functions |
+| [`docs/KEYWORDS.md`](docs/KEYWORDS.md) | All 26 supported C keywords, by category, plus the composite type system, `typeof`, and built-in stdlib functions |
 | [`docs/HEADERS.md`](docs/HEADERS.md) | Full syntax reference for `<core.h>`, `"user.h"`, and `<bridge.jh>` includes |
 
 ---
@@ -225,6 +235,8 @@ If you don't need `#include "x.h"` / `#include <x.jh>` resolution, opening `inde
 | Feature | Support |
 |---|---|
 | `int`, `float`, `double`, `char` | ✅ |
+| `long`, `short`, `unsigned`, `signed` (incl. combinations) | ✅ |
+| `typeof(x)` | ✅ Curnx extension |
 | Arrays | ✅ |
 | Pointers (`*`, `&`) | ✅ (simplified) |
 | `struct` | ✅ |
@@ -235,8 +247,9 @@ If you don't need `#include "x.h"` / `#include <x.jh>` resolution, opening `inde
 | `break`, `continue` | ✅ |
 | `return` | ✅ |
 | Recursion | ✅ |
-| `printf` | ✅ Full format strings |
-| `scanf` | ✅ Via browser prompt |
+| `(type)` casts | ✅ Real conversion (int/float/char) |
+| `printf` | ✅ Width, precision, flags, `%i`, `%lld`/`%llx`/`%llu` |
+| `scanf` | ✅ Via browser prompt, incl. `%[^\n]` scansets |
 | Math functions | ✅ `sqrt`, `pow`, `sin`, `cos`… |
 | String functions | ✅ `strlen`, `strcmp`, `strcat`… |
 | `sizeof` | ✅ Returns 4 |
@@ -270,5 +283,3 @@ Thank you to everyone who has contributed to Curnx. Add yourself here when you s
 - *Curnx CJs Contributors* — original engine, parser, and interpreter
 
 ---
-
-*Built with ❤️ using zero dependencies — just HTML, CSS, and vanilla JavaScript.*
