@@ -1,5 +1,5 @@
 // ============================================================
-//  CURNX v1.1 — src/app.js
+//  CURNX v1.2 — src/app.js
 //  Main UI / App Logic
 //  Handles editor, output rendering, run button, samples.
 //  Drives the engine entirely through the public Curnx API
