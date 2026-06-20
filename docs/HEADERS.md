@@ -89,4 +89,4 @@ void main() {
 - Duplicate `"user.h"` includes are skipped automatically (include-guard behavior is automatic).
 
 ---
-*Curnx v1.1*
+*Curnx v1.2*
