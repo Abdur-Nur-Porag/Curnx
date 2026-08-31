@@ -204,20 +204,6 @@ void main() {
 
 ---
 
-## Getting Started
-
-No build tools, no npm, no dependencies.
-
-```bash
-git clone https://github.com/YOUR_USERNAME/curnx.git
-cd curnx
-python3 -m http.server   # headers/.jh need real HTTP, not file://
-# open http://localhost:8000
-```
-
-If you don't need `#include "x.h"` / `#include <x.jh>` resolution, opening `index.html` directly still works.
-
----
 
 ## Keyboard Shortcuts
 
@@ -260,26 +246,3 @@ If you don't need `#include "x.h"` / `#include <x.jh>` resolution, opening `inde
 | `#define` | ⚠️ Skipped (not needed) |
 | File I/O | ❌ |
 
----
-
-## License
-
-MIT + Attribution — free to use, modify, and distribute, **with one condition**: keep crediting the Contributors.
-
-Curnx is free for use and distribution, but every copy, fork, or derivative must continue to visibly highlight its Contributors — the same attribution principle organizations like the **Mozilla Foundation** apply to the projects they steward. Stripping or hiding contributor credit is the one thing this license doesn't allow.
-
-In practice, that means:
-- Keep the copyright notice and this attribution clause in any copy of the source.
-- If you ship Curnx (or a fork of it) in a product, app, or site, credit it and its Contributors somewhere reasonably visible — a README, an "About"/credits page, or a `NOTICE` file all count.
-
-See [`LICENSE`](LICENSE) for the full text.
-
----
-
-### Contributors
-
-Thank you to everyone who has contributed to Curnx. Add yourself here when you submit a PR:
-
-- *Curnx CJs Contributors* — original engine, parser, and interpreter
-
----
