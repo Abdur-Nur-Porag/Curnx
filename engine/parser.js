@@ -247,6 +247,21 @@ function parse(tokens) {
     return { base, category, unsigned, ptr };
   };
 
+  // Reads zero or more trailing `[expr]` / `[]` pairs after a declarator
+  // name, e.g. `arr[5]`, `grid[3][4]`, `line[]`. Returns an array of AST
+  // expr nodes (dimension sizes) with `null` standing in for an omitted
+  // size (only meaningful as the first dimension, inferred from an
+  // initializer — same rule real C uses for `int arr[] = {1,2,3};`).
+  function parseArrayDims() {
+    const dims = [];
+    while (match(TT.LBRACKET)) {
+      if (check(TT.RBRACKET)) dims.push(null);
+      else dims.push(parseExpr());
+      eat(TT.RBRACKET);
+    }
+    return dims;
+  }
+
   // ── TOP LEVEL ──────────────────────────────────────────────
 
   function parseProgram() {
@@ -271,9 +286,8 @@ function parse(tokens) {
       const ft = parseType();
       do {
         const fn = eat(TT.ID);
-        let sz = null;
-        if (match(TT.LBRACKET)) { sz = parseExpr(); eat(TT.RBRACKET); }
-        fields.push({ name: fn.val, type: ft, size: sz });
+        const dims = parseArrayDims();
+        fields.push({ name: fn.val, type: ft, dims: dims.length ? dims : null });
       } while (match(TT.COMMA));
       eat(TT.SEMI);
     }
@@ -284,16 +298,16 @@ function parse(tokens) {
 
   function parseGlobalVar(typ, name) {
     const decls2 = [];
-    let sz = null, init = null;
-    if (match(TT.LBRACKET)) { if (!check(TT.RBRACKET)) sz = parseExpr(); eat(TT.RBRACKET); }
-    if (match(TT.ASSIGN)) init = parseAssign();
-    decls2.push({ name: name.val, size: sz, init });
+    const dims0 = parseArrayDims();
+    let init = null;
+    if (match(TT.ASSIGN)) init = check(TT.LBRACE) ? parseInitList() : parseAssign();
+    decls2.push({ name: name.val, dims: dims0.length ? dims0 : null, init });
     while (match(TT.COMMA)) {
       const n = eat(TT.ID);
-      let s2 = null, i2 = null;
-      if (match(TT.LBRACKET)) { if (!check(TT.RBRACKET)) s2 = parseExpr(); eat(TT.RBRACKET); }
-      if (match(TT.ASSIGN)) i2 = parseAssign();
-      decls2.push({ name: n.val, size: s2, init: i2 });
+      const d2 = parseArrayDims();
+      let i2 = null;
+      if (match(TT.ASSIGN)) i2 = check(TT.LBRACE) ? parseInitList() : parseAssign();
+      decls2.push({ name: n.val, dims: d2.length ? d2 : null, init: i2 });
     }
     eat(TT.SEMI);
     return { type: 'VarDecl', varType: typ, decls: decls2, global: true };
@@ -362,13 +376,13 @@ function parse(tokens) {
     const decls2 = [];
     do {
       const name = eat(TT.ID);
-      let sz = null, init = null;
-      if (match(TT.LBRACKET)) { if (!check(TT.RBRACKET)) sz = parseExpr(); eat(TT.RBRACKET); }
+      const dims = parseArrayDims();
+      let init = null;
       if (match(TT.ASSIGN)) {
         if (check(TT.LBRACE)) init = parseInitList();
         else init = parseAssign();
       }
-      decls2.push({ name: name.val, size: sz, init });
+      decls2.push({ name: name.val, dims: dims.length ? dims : null, init });
     } while (match(TT.COMMA));
     eat(TT.SEMI);
     return { type: 'VarDecl', varType: typ, decls: decls2 };
@@ -511,9 +525,24 @@ function parse(tokens) {
     if (check(TT.DEC))   { eat(); return { type: 'PreInc', op: '--', expr: parseUnary() }; }
     if (check(TT.SIZEOF)) {
       eat();
-      if (match(TT.LPAREN)) { if (isTypeName()) parseType(); else parseExpr(); eat(TT.RPAREN); }
-      else parseUnary();
-      return { type: 'Num', val: 4 };
+      let argType = null, argExpr = null;
+      if (match(TT.LPAREN)) {
+        if (check(TT.STRUCT)) {
+          eat();
+          const sn = eat(TT.ID).val;
+          let ptr = 0;
+          while (check(TT.STAR)) { eat(); ptr++; }
+          argType = { base: 'struct:' + sn, category: 'struct', unsigned: false, ptr };
+        } else if (isTypeName()) {
+          argType = parseType();
+        } else {
+          argExpr = parseExpr();
+        }
+        eat(TT.RPAREN);
+      } else {
+        argExpr = parseUnary();
+      }
+      return { type: 'SizeOf', argType, argExpr };
     }
     if (check(TT.TYPEOF)) {
       eat();
@@ -573,3 +602,5 @@ function parse(tokens) {
 
   return parseProgram();
 }
+
+if (typeof module !== 'undefined' && module.exports) module.exports = { tokenize, parse, TT };

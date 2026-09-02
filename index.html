@@ -7,13 +7,54 @@
 
   <!-- Stylesheet -->
   <link rel="stylesheet" href="css/style.css" />
+
+  <!-- Self-contained styles for the v1.3 Memory viewer panel — kept
+       inline so it renders correctly whether or not css/style.css
+       defines anything for it. -->
+  <style>
+    #memory-toggle-wrap { display: inline-block; }
+    #memory-panel {
+      display: none;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 12.5px;
+      background: #12151c;
+      color: #d7dde5;
+      border-top: 1px solid #2a2f3a;
+      max-height: 240px;
+      overflow: auto;
+      padding: 10px 12px;
+    }
+    #memory-panel.open { display: block; }
+    #memory-panel h4 {
+      margin: 0 0 6px 0;
+      font-size: 11px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: #8b93a3;
+      font-weight: 600;
+    }
+    #memory-panel table { border-collapse: collapse; width: 100%; margin-bottom: 12px; }
+    #memory-panel th, #memory-panel td {
+      text-align: left; padding: 3px 10px 3px 0; white-space: nowrap;
+    }
+    #memory-panel th { color: #8b93a3; font-weight: 600; border-bottom: 1px solid #2a2f3a; }
+    #memory-panel td.mem-addr  { color: #7ec8ff; }
+    #memory-panel td.mem-type  { color: #c9a0ff; }
+    #memory-panel td.mem-value { color: #9ee6a8; }
+    #memory-panel .mem-stats { color: #8b93a3; line-height: 1.7; }
+    #memory-panel .mem-stats b { color: #d7dde5; }
+    #memory-panel .mem-empty  { color: #8b93a3; font-style: italic; }
+  </style>
 </head>
 <body>
 
   <!-- ── Header ─────────────────────────────────────────────── -->
   <header>
     <div class="logo">Curnx <span>CJs</span></div>
-    <div class="tagline">C Parser &amp; Interpreter — Vanilla JavaScript · v1.2</div>
+    <div class="tagline">C Parser &amp; Interpreter — Vanilla JavaScript · v1.3</div>
+    <span id="memory-toggle-wrap">
+      <button class="btn btn-clear" id="memory-toggle" onclick="toggleMemoryPanel()">🧠 Memory</button>
+    </span>
     <button class="btn btn-clear" onclick="clearOutput()">Clear</button>
     <button class="btn btn-run"   onclick="runCode()">▶ Run</button>
   </header>
@@ -41,12 +82,19 @@
       <div id="output-wrap">
         <div class="out-line out-info">// Run your C code to see output here</div>
       </div>
+      <!-- v1.3 — virtual memory viewer: globals + allocator stats from
+           the last run, straight out of Curnx.execute()'s result.memory -->
+      <div id="memory-panel">
+        <div id="memory-panel-body" class="mem-empty">Run a program to inspect its virtual memory here.</div>
+      </div>
     </div>
 
   </div>
 
   <!-- ── Scripts (order matters) ──────────────────────────────
        engine/ holds the framework itself:
+         memory.js      → v1.3: the virtual RAM (VMemory) — real
+                           byte-addressable DATA/HEAP/STACK segments
          parser.js      → tokenizer + AST generator
          interpreter.js → AST evaluator (+ JS-bridge support)
          curnx.js        → base of the framework (Curnx.execute,
@@ -54,6 +102,7 @@
                             #include for core/.h/.jh headers
        src/ holds the demo app built on top of the engine.
   -->
+  <script src="engine/memory.js"></script>
   <script src="engine/parser.js"></script>
   <script src="engine/interpreter.js"></script>
   <script src="engine/curnx.js"></script>

@@ -1,5 +1,5 @@
 // ============================================================
-//  CURNX v1.2 — src/samples.js
+//  CURNX v1.3 — src/samples.js
 //  Built-in C code examples shown in the UI
 // ============================================================
 
@@ -122,6 +122,110 @@ int main() {
     printf("Before: x=%d, y=%d\\n", x, y);
     swap(&x, &y);
     printf("After:  x=%d, y=%d\\n", x, y);
+    return 0;
+}`
+  },
+  {
+    label: 'Memory & Addresses (v1.3)',
+    code: `#include <stdio.h>
+
+int main() {
+    int x = 42;
+    int *p = &x;
+
+    printf("x lives at address: %p\\n", &x);
+    printf("p itself lives at:  %p\\n", &p);
+    printf("p points to:        %p\\n", p);
+    printf("*p (value at that address) = %d\\n\\n", *p);
+
+    printf("sizeof(int)    = %d bytes\\n", sizeof(int));
+    printf("sizeof(char)   = %d bytes\\n", sizeof(char));
+    printf("sizeof(double) = %d bytes\\n", sizeof(double));
+    printf("sizeof(int *)  = %d bytes (a real pointer, on this VM)\\n\\n", sizeof(p));
+
+    *p = 100;
+    printf("wrote 100 through p, x is now: %d\\n", x);
+    return 0;
+}`
+  },
+  {
+    label: '2D Arrays (v1.3)',
+    code: `#include <stdio.h>
+
+int main() {
+    int grid[3][3] = {
+        {1, 2, 3},
+        {4, 5, 6},
+        {7, 8, 9}
+    };
+
+    printf("The grid:\\n");
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) printf("%3d ", grid[i][j]);
+        printf("\\n");
+    }
+
+    int total = 0;
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++)
+            total += grid[i][j];
+    printf("\\nSum of all elements: %d\\n", total);
+
+    printf("sizeof(grid)    = %d bytes (3 x 3 ints)\\n", sizeof(grid));
+    printf("sizeof(grid[0]) = %d bytes (one row)\\n", sizeof(grid[0]));
+
+    // a row decays to a real pointer, just like in C
+    int *row = grid[1];
+    row[0] = 99;
+    printf("grid[1][0] via row pointer is now: %d\\n", grid[1][0]);
+    return 0;
+}`
+  },
+  {
+    label: 'Pointer Arithmetic (v1.3)',
+    code: `#include <stdio.h>
+
+int main() {
+    int nums[5] = {10, 20, 30, 40, 50};
+    int *p = nums;   // array decays to a pointer to its first element
+
+    printf("Walking the array with pointer arithmetic:\\n");
+    for (int i = 0; i < 5; i++) {
+        printf("  *(p + %d) = %d   (address %p)\\n", i, *(p + i), p + i);
+    }
+
+    int *start = &nums[0];
+    int *end   = &nums[4];
+    printf("\\nend - start = %ld elements apart\\n", end - start);
+
+    p++;
+    printf("after p++, *p = %d\\n", *p);
+    p += 2;
+    printf("after p += 2, *p = %d\\n", *p);
+    return 0;
+}`
+  },
+  {
+    label: 'Dynamic Memory (v1.3)',
+    code: `#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+    int n = 5;
+    int *arr = malloc(n * sizeof(int));   // real heap allocation, real address
+
+    for (int i = 0; i < n; i++) arr[i] = (i + 1) * (i + 1);
+
+    printf("Heap block starts at: %p\\n", arr);
+    printf("Squares: ");
+    for (int i = 0; i < n; i++) printf("%d ", arr[i]);
+    printf("\\n");
+
+    free(arr);
+
+    int *arr2 = malloc(3 * sizeof(int));
+    printf("\\nAfter free(), a new allocation reuses that address: %p\\n", arr2);
+    free(arr2);
     return 0;
 }`
   },

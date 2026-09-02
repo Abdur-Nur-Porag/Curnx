@@ -75,6 +75,7 @@ void main() {
 - Use top-level `function name(...) {}` declarations — arrow functions assigned to `const`/`let`/`var` also work, but plain `function` is recommended for clarity.
 - Arguments and return values are passed as plain JS values (numbers, strings) — no manual type marshaling needed for primitives.
 - The `.jh` file itself never touches the C interpreter's memory model directly; it only returns a value back into C.
+- **New in v1.3**: C variables now live in a real virtual memory space internally (see the main README's "What's new in v1.3"), but this is transparent from a `.jh` file's point of view — a C `char[]`/`char *` argument still arrives as a plain JS string, and a C array argument still arrives as a plain JS array, exactly as in v1.2. Curnx does the address-to-value conversion for you at the call boundary.
 
 ## Resolution Rules (all three kinds)
 
@@ -89,4 +90,4 @@ void main() {
 - Duplicate `"user.h"` includes are skipped automatically (include-guard behavior is automatic).
 
 ---
-*Curnx v1.2*
+*Curnx v1.3*

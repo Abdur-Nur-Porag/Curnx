@@ -1,5 +1,5 @@
 // ============================================================
-//  CURNX v1.2 — engine/curnx.js
+//  CURNX v1.3 — engine/curnx.js
 //  Base of the framework. Calls the parser (tokenizer + AST)
 //  and the interpreter, and resolves C preprocessor includes:
 //
@@ -9,18 +9,36 @@
 //                            native JS "bridge" callable from C
 //
 //  Public API:
-//    Curnx.execute(code, opts)      → Promise<Result>
-//    Curnx.loadExecute(path, opts)  → Promise<Result>
+//    Curnx.execute(code, opts)      → Promise<r>
+//    Curnx.loadExecute(path, opts)  → Promise<r>
 //    Curnx.ast(code, opts)          → Promise<ASTNode>
 //    Curnx.compile(code, opts)      → Promise<{source,tokens,ast,jsBridge}>
 //
-//  Depends on: engine/parser.js (tokenize, parse)
+//  Depends on: engine/memory.js  (VMemory — the virtual RAM, new in v1.3)
+//              engine/parser.js  (tokenize, parse)
 //              engine/interpreter.js (Interpreter, ReturnSignal)
+//  Script order matters in index.html: memory.js, then parser.js,
+//  then interpreter.js, then this file.
 // ============================================================
 
 const Curnx = (() => {
 
-  const VERSION = '1.2.0';
+  const VERSION = '1.3.0';
+
+  // Node/browser dual-load, same pattern as engine/interpreter.js —
+  // only exercised by the Node test harness, has no effect in-browser.
+  const _CurnxDeps = (typeof module !== 'undefined' && module.exports) ? {
+    tokenize:     require('./parser.js').tokenize,
+    parse:        require('./parser.js').parse,
+    Interpreter:  require('./interpreter.js').Interpreter,
+    ReturnSignal: require('./interpreter.js').ReturnSignal,
+  } : {
+    tokenize:     (typeof tokenize !== 'undefined') ? tokenize : undefined,
+    parse:        (typeof parse !== 'undefined') ? parse : undefined,
+    Interpreter:  (typeof Interpreter !== 'undefined') ? Interpreter : undefined,
+    ReturnSignal: (typeof ReturnSignal !== 'undefined') ? ReturnSignal : undefined,
+  };
+  const { tokenize: _tokenize, parse: _parse, Interpreter: _Interpreter, ReturnSignal: _ReturnSignal } = _CurnxDeps;
 
   // Core C headers Curnx already implements as builtins —
   // included for compatibility, resolved as a no-op.
@@ -139,10 +157,24 @@ const Curnx = (() => {
     const seen      = new Set();
 
     const finalSource = await resolveSource(source, basePath, jsBridge, seen);
-    const tokens       = tokenize(finalSource);
-    const astTree       = parse(tokens);
+    const tokens       = _tokenize(finalSource);
+    const astTree       = _parse(tokens);
 
     return { source: finalSource, tokens, ast: astTree, jsBridge };
+  }
+
+  // Snapshot of global-scope variables — name, address, declared
+  // type, and current value — for a "virtual environment" viewer.
+  function _describeGlobals(interp) {
+    const out = [];
+    for (const name in interp.global.slots) {
+      const addr = interp.global.slots[name];
+      const desc = interp.global.descs[name];
+      let value;
+      try { value = interp.memRead(addr, desc); } catch (e) { value = undefined; }
+      out.push({ name, address: interp.memory.fmtAddr(addr), type: interp._descToString(desc), value });
+    }
+    return out;
   }
 
   // ── Execute: compile + run, captures stdout ──────────────
@@ -152,17 +184,17 @@ const Curnx = (() => {
 
     const { ast: astTree, jsBridge, source } = await compile(code, opts);
 
-    const interp = new Interpreter((text) => {
+    const interp = new _Interpreter((text) => {
       buffered += text;
       if (onOutput) onOutput(text);
-    }, { jsBridge });
+    }, { jsBridge, memorySize: opts.memorySize });
 
     let exitCode = 0, error = null;
     try {
       const r = interp.run(astTree);
       exitCode = r ?? 0;
     } catch (e) {
-      if (e instanceof ReturnSignal) exitCode = e.val ?? 0;
+      if (e instanceof _ReturnSignal) exitCode = e.val ?? 0;
       else error = e.message || String(e);
     }
 
@@ -172,7 +204,14 @@ const Curnx = (() => {
       error,
       ast:      astTree,
       source,
-      steps:    interp.stepCount
+      steps:    interp.stepCount,
+      // New in v1.3 — a look inside the virtual memory this run used:
+      // global variables (name/address/type/value) and allocator stats
+      // (data/heap/stack usage, live heap blocks, peak stack depth).
+      memory: {
+        globals: _describeGlobals(interp),
+        stats:   interp.memory.stats(),
+      },
     };
   }
 

@@ -1,7 +1,8 @@
 // ============================================================
-//  CURNX v1.2 — src/app.js
+//  CURNX v1.3 — src/app.js
 //  Main UI / App Logic
-//  Handles editor, output rendering, run button, samples.
+//  Handles editor, output rendering, run button, samples, and
+//  the v1.3 virtual memory viewer panel.
 //  Drives the engine entirely through the public Curnx API
 //  (engine/curnx.js) rather than touching the parser/interpreter
 //  directly — this is how user code is expected to call it too.
@@ -34,6 +35,61 @@ function clearOutput() {
   outputLines = [];
   renderOutput();
   document.getElementById('status').textContent = 'Cleared';
+  resetMemoryPanel();
+}
+
+// ── v1.3 — Memory viewer panel ───────────────────────────────
+// Renders result.memory (from Curnx.execute()) — the global
+// variables and allocator stats from the run that just finished.
+// Local/stack variables aren't shown here: by the time a program
+// finishes, their stack frames have really been popped, exactly
+// like on a real machine — there's nothing left to inspect.
+function toggleMemoryPanel() {
+  const panel = document.getElementById('memory-panel');
+  const btn   = document.getElementById('memory-toggle');
+  const open  = panel.classList.toggle('open');
+  btn.classList.toggle('btn-active', open);
+}
+
+function resetMemoryPanel() {
+  document.getElementById('memory-panel-body').innerHTML =
+    '<div class="mem-empty">Run a program to inspect its virtual memory here.</div>';
+}
+
+function fmtMemValue(v) {
+  if (v === undefined || v === null) return '—';
+  if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(6);
+  return escHtml(String(v));
+}
+
+function renderMemoryPanel(mem) {
+  const body = document.getElementById('memory-panel-body');
+  if (!mem) { resetMemoryPanel(); return; }
+
+  const globalsRows = mem.globals.length
+    ? mem.globals.map(g => `
+        <tr>
+          <td>${escHtml(g.name)}</td>
+          <td class="mem-addr">${escHtml(g.address)}</td>
+          <td class="mem-type">${escHtml(g.type)}</td>
+          <td class="mem-value">${fmtMemValue(g.value)}</td>
+        </tr>`).join('')
+    : `<tr><td colspan="4" class="mem-empty">no global variables</td></tr>`;
+
+  const s = mem.stats;
+  body.innerHTML = `
+    <h4>Global / Data Segment</h4>
+    <table>
+      <thead><tr><th>Name</th><th>Address</th><th>Type</th><th>Value</th></tr></thead>
+      <tbody>${globalsRows}</tbody>
+    </table>
+    <h4>Allocator Stats</h4>
+    <div class="mem-stats">
+      data segment: <b>${s.dataUsed}</b> bytes used &nbsp;·&nbsp;
+      heap: <b>${s.heapLiveBlocks}</b> live block${s.heapLiveBlocks === 1 ? '' : 's'}
+      (<b>${s.heapLiveBytes}</b> bytes), <b>${s.heapBumpUsed}</b> bytes ever allocated &nbsp;·&nbsp;
+      stack: peak <b>${s.stackPeakUsed}</b> bytes used
+    </div>`;
 }
 
 // ── Run pipeline, via Curnx.execute() ────────────────────────
@@ -71,11 +127,13 @@ async function runCode() {
       addLine(`— exited with code ${result.exitCode} in ${elapsed}ms —`, 'out-info');
       status.textContent = `Done in ${elapsed}ms · ${result.steps.toLocaleString()} steps`;
     }
+    renderMemoryPanel(result.memory);
 
   } catch (e) {
     flushBuf();
     addLine(`Error: ${e.message}`, 'out-err');
     status.textContent = `Error: ${e.message.slice(0, 60)}`;
+    resetMemoryPanel();
   }
 }
 

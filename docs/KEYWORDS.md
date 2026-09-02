@@ -2,6 +2,12 @@
 
 Curnx supports **26 keywords**. Anything outside this list is treated as an identifier (variable/function name) or simply unsupported.
 
+## What changed in v1.3
+
+- **`sizeof`** no longer always evaluates to `4` — it's now a real runtime type-size lookup backed by the new virtual memory model (`engine/memory.js`): `sizeof(int)` → 4, `sizeof(double)` → 8, `sizeof(char)` → 1, `sizeof(some_pointer)` → real pointer size, `sizeof(some_array)` → the array's true total byte size (not a decayed pointer size), `sizeof(struct S)` → the sum of its real field sizes.
+- **`float` vs `double` are now genuinely distinct** — `float` stores at real 32-bit precision (like actual C), `double`/`long double` at 64-bit. Previously both silently shared JS's native double under the hood.
+- Array declarators now accept multiple dimensions: `int grid[3][4];`, with nested brace initializers `{{1,2},{3,4}}`.
+
 ## What changed in v1.2
 
 - `long`, `short`, `unsigned`, `signed` are no longer aliased straight to `int` — they're now real type **modifiers** that combine with a base type, so `long long int`, `unsigned long`, `long double`, `signed char`, etc. all parse and report their real composite name.
@@ -48,31 +54,33 @@ Curnx supports **26 keywords**. Anything outside this list is treated as an iden
 | `return` | Function | Return from function |
 | `struct` | Data structure | Aggregate type definition |
 | `typedef` | Data structure | Parsed, but the alias is discarded (no-op) |
-| `sizeof` | Operator | Always evaluates to `4` |
+| `sizeof` | Operator | Real byte size — backed by the virtual memory model (was hardcoded to `4` before v1.3) |
 | `typeof` | Operator (Curnx extension) | Returns the datatype name as a string — see below |
 | `NULL` | Constant | Evaluates to `0` |
 
-## Composite Type Reference (new in v1.2)
+## Composite Type Reference
 
-These all parse correctly and report their canonical name via `typeof`:
+These all parse correctly and report their canonical name via `typeof`, and (new in v1.3) occupy their real byte width in the virtual memory model:
 
-| You write | Canonical name | Category |
-|---|---|---|
-| `int` | `int` | integer |
-| `long` / `long int` | `long int` | integer |
-| `long long` / `long long int` | `long long int` | integer |
-| `short` / `short int` | `short int` | integer |
-| `unsigned` / `unsigned int` | `unsigned int` | integer |
-| `unsigned long` | `unsigned long int` | integer |
-| `unsigned long long` | `unsigned long long int` | integer |
-| `unsigned short` | `unsigned short int` | integer |
-| `signed char` | `signed char` | char |
-| `unsigned char` | `unsigned char` | char |
-| `float` | `float` | floating point |
-| `double` | `double` | floating point |
-| `long double` | `long double` | floating point |
+| You write | Canonical name | Category | Real size |
+|---|---|---|---|
+| `int` | `int` | integer | 4 bytes |
+| `long` / `long int` | `long int` | integer | 8 bytes |
+| `long long` / `long long int` | `long long int` | integer | 8 bytes |
+| `short` / `short int` | `short int` | integer | 2 bytes |
+| `unsigned` / `unsigned int` | `unsigned int` | integer | 4 bytes |
+| `unsigned long` | `unsigned long int` | integer | 8 bytes |
+| `unsigned long long` | `unsigned long long int` | integer | 8 bytes |
+| `unsigned short` | `unsigned short int` | integer | 2 bytes |
+| `char` | `char` | char | 1 byte |
+| `signed char` | `signed char` | char | 1 byte |
+| `unsigned char` | `unsigned char` | char | 1 byte |
+| `float` | `float` | floating point | 4 bytes, real 32-bit precision |
+| `double` | `double` | floating point | 8 bytes |
+| `long double` | `long double` | floating point | 8 bytes (approximated — see note) |
+| any `T *` / `T **` … | `T *` / `T **` | pointer | 8 bytes, regardless of `T` |
 
-> Curnx evaluates everything as a JS number under the hood, so `long`/`long long` get the practical range of a JS safe integer (±2^53), not true fixed 64-bit wraparound — plenty for typical interpreter use, just not bit-exact with native C on overflow.
+> Curnx evaluates everything as a JS number under the hood, so 8-byte integer types (`long`, `long long`, and their `unsigned` forms) get the practical range of a JS safe integer (±2^53), not true fixed 64-bit wraparound — plenty for typical interpreter use, just not bit-exact with native C on overflow. `long double` is stored the same way `double` is (a real C compiler would typically give it 80 or 128 bits); `float`, by contrast, *is* bit-exact to a real 32-bit IEEE-754 value, including its precision loss relative to `double`.
 
 ## `typeof` — Curnx Extension
 
@@ -116,5 +124,7 @@ Not keywords either, but available without linking — grouped by header for ref
 | `math.h` | `abs`, `fabs`, `sqrt`, `pow`, `floor`, `ceil`, `round`, `sin`, `cos`, `tan`, `log`, `log10`, `exp`, `max`, `min` |
 | `ctype.h` | `toupper`, `tolower`, `isalpha`, `isdigit`, `isspace`, `isalnum`, `isupper`, `islower` |
 
+> New in v1.3: `malloc`/`calloc`/`free` allocate and release from a real heap (with address reuse after `free`), and `memset`/`memcpy` actually touch memory — in v1.2 `malloc` faked allocation with a plain JS array and `free`/`memset`/`memcpy` were silent no-ops.
+
 ---
-*Curnx v1.2*
+*Curnx v1.3*
