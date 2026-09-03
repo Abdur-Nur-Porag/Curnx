@@ -45,9 +45,7 @@
 - **Public `Curnx` API** for embedding the engine in your own page — `Curnx.execute()`, `Curnx.loadExecute()`, `Curnx.ast()`.
 
 ---
-
 ## Features
-
 - **Full C Lexer** — tokenizes keywords, operators, literals, identifiers
 - **Recursive Descent Parser** — builds a complete AST, with a robust composite-type system (`long long int`, `unsigned long`, `long double`, etc.) and multi-dimensional array declarators
 - **Tree-walk Interpreter** — evaluates the AST directly in JS
@@ -61,20 +59,14 @@
 - **`#include`** — core headers, user `.h` headers, and `.jh` JS-bridge headers
 - **Standard library** — `sqrt`, `pow`, `abs`, `rand`, `strlen`, `strcmp`, `atoi`, `malloc`/`calloc`/`free` (a real heap), `toupper`, and more
 - **17 built-in samples** — Hello World, Fibonacci, Factorial, Bubble Sort, Structs, Switch, Pointers, Memory & Addresses, 2D Arrays, Pointer Arithmetic, Dynamic Memory, scanf, User Header, JS Bridge, Type System, typeof Demo, scanf scanset
-
 ---
-
 ## Documentation
-
 | Doc | Covers |
 |---|---|
 | [`docs/KEYWORDS.md`](docs/KEYWORDS.md) | All 26 supported C keywords, by category, plus the composite type system, `typeof`, and built-in stdlib functions |
 | [`docs/HEADERS.md`](docs/HEADERS.md) | Full syntax reference for `<core.h>`, `"user.h"`, and `<bridge.jh>` includes |
-
 ---
-
 ## Project Structure
-
 ```
 curnx/
 ├── index.html          ← Main UI (links all files)
@@ -99,7 +91,6 @@ curnx/
 ├── LICENSE
 └── README.md
 ```
-
 `engine/curnx.js` is the framework's entry point — it calls into `memory.js` (virtual RAM), `parser.js` (tokenizer + AST), and `interpreter.js` (evaluator) so you never have to touch any of them directly. Script order in `index.html` matters: `memory.js` loads before `interpreter.js`, which depends on it.
 
 ---
